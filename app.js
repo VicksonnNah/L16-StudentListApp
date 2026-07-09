@@ -1,5 +1,6 @@
 const express = require('express');
 const mysql = require('mysql2');
+const multer = require('multer');
 const app = express();
 // Create MySQL connection
 const connection = mysql.createConnection({
@@ -8,6 +9,18 @@ const connection = mysql.createConnection({
     password: 'Kerwin69',
     database: 'c237_studentlistapp'
 });
+
+// Set up multer for file uploads
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'public/images'); // Directory to save uploaded files
+    },
+    filename: (req, file, cb) => {
+        cb(null, file.originalname);
+    }
+});
+const upload = multer({ storage: storage });
+
 connection.connect((err) => {
     if (err) {
         console.error('Error connecting to MySQL:', err);
@@ -21,6 +34,7 @@ app.set('view engine', 'ejs');
 app.use(express.static('public'));
 //enable form processing
 app.use(express.urlencoded({ extended: false }));
+
 
 // Define routes
 app.get('/', (req, res) => {
@@ -60,21 +74,27 @@ app.get('/student/:id', (req, res) => {
 app.get('/addStudent', (req, res) => {
     res.render('addStudent');
 });
-app.post('/addStudent', (req, res) => {
+app.post('/addStudent', upload.single('image'), (req, res) => {
     // Extract student data from the request body
-    const { name, dob, contact, image } = req.body;
-    const sql = 'INSERT INTO student (name, dob, contact, image) VALUES (?,?, ?, ?)';
-// Insert the new student into the database
-connection.query(sql, [name, dob, contact, image], (error, results) => {
-    if (error) {
-        // Handle any error that occurs during the database operation
-        console.error("Error adding student:", error);
-        res.send('Error adding student');
+    const { name, dob, contact } = req.body;
+    let image;
+    if (req.file) {
+        image = req.file.filename; // Save only the filename
     } else {
-        // Send a success response
-        res.redirect('/');
+        image = null;
     }
-});
+    const sql = 'INSERT INTO student (name, dob, contact, image) VALUES (?,?, ?, ?)';
+    // Insert the new student into the database
+    connection.query(sql, [name, dob, contact, image], (error, results) => {
+        if (error) {
+            // Handle any error that occurs during the database operation
+            console.error("Error adding student:", error);
+            res.send('Error adding student');
+        } else {
+            // Send a success response
+            res.redirect('/');
+        }
+    });
 });
 
 app.get('/editStudent/:id', (req, res) => {
@@ -105,13 +125,17 @@ app.get('/editStudent/:id', (req, res) => {
     });
 });
 
-app.post('/editStudent/:id', (req, res) => {
+app.post('/editStudent/:id', upload.single('image'), (req, res) => {
     const studentId = req.params.id;
     // Extract student data from the request body
     const { name, dob, contact } = req.body;
-    const sql = 'UPDATE student SET name = ? , dob = ?, contact = ? WHERE studentId = ?';
+    let image = req.body.currentImage; //retrieve current image filename
+    if (req.file) { //if new image is uploaded
+        image = req.file.filename; // set image to be new image filename
+    }
+    const sql = 'UPDATE student SET name = ? , dob = ?, contact = ?, image = ? WHERE studentId = ?';
     // Insert the new student into the database
-    connection.query(sql, [name, dob, contact, studentId], (error, results) => {
+    connection.query(sql, [name, dob, contact, image, studentId], (error, results) => {
         if (error) {
             // Handle any error that occurs during the database operation
             console.error("Error updating student:", error);
